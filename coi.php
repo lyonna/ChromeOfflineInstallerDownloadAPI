@@ -94,16 +94,33 @@ while ($active && $mrc == CURLM_OK) {
 foreach ($posts as $key => $postData) {
     $info = curl_multi_info_read($mh);
     $heards = curl_getinfo($ch[$key]);
-    $res[$key] = curl_multi_getcontent($ch[$key]);
+    $res[$key]['error'] = curl_error($ch[$key]);
+    $res[$key]['content'] = curl_multi_getcontent($ch[$key]);
     curl_multi_remove_handle($mh, $ch[$key]);
     curl_close($ch[$key]);
 }
 curl_multi_close($mh);
 
 // XML to Array
-foreach ($res as $key => $xml) {
-    $xml = json_decode(json_encode(simplexml_load_string($xml)), TRUE);
-    if ($xml) {
+foreach ($res as $key => $value) {
+    $xml = json_decode(json_encode(simplexml_load_string($value['content'])), TRUE);
+    if ($value['error']) {
+        $res[$key] = array(
+            "error" => $value['error'],
+            "version" => "",
+            "size" => 0,
+            "sha256" => "",
+            "urls" => array()
+        );
+    } elseif (!$xml) {
+        $res[$key] = array(
+            "error" => "Failed to parse XML text",
+            "version" => "",
+            "size" => 0,
+            "sha256" => "",
+            "urls" => array()
+        );
+    } else {
         $urls = array();
         foreach ($xml['app']['updatecheck']['urls']['url'] as $url) {
             $url = $url['@attributes']['codebase'].$xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['name'];
@@ -111,19 +128,11 @@ foreach ($res as $key => $xml) {
         }
 
         $res[$key] = array(
-            "error" => false,
+            "error" => "",
             "version" => $xml['app']['updatecheck']['manifest']['@attributes']['version'],
             "size" => $xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['size'],
             "sha256" => $xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['hash_sha256'],
             "urls" => $urls
-        );
-    } else {
-        $res[$key] = array(
-            "error" => true,
-            "version" => "",
-            "size" => 0,
-            "sha256" => "",
-            "urls" => array()
         );
     }
 }

@@ -1,14 +1,14 @@
 <?php
-$oslist = array('win', 'mac');
-$channellist = array('stable', 'beta', 'dev', 'canary');
-$archlist = array('x64', 'x86');
 
-function getchromelinks ($os, $channel, $arch) {
-    $verlist = array(
+function getPosts() {
+    $oss = array('win', 'mac');
+    $channels = array('stable', 'beta', 'dev', 'canary');
+    $arches = array('x64', 'x86');
+    $vers = array(
         'win' => '6.3',
         'mac' => '46.0.2490.86'
     );
-    $appidlist = array(
+    $appids = array(
         'win_stable' => '{8A69D345-D564-463C-AFF1-A69D9E530F96}',
         'win_beta' => '{8A69D345-D564-463C-AFF1-A69D9E530F96}',
         'win_dev' => '{8A69D345-D564-463C-AFF1-A69D9E530F96}',
@@ -18,7 +18,7 @@ function getchromelinks ($os, $channel, $arch) {
         'mac_dev' => 'com.google.Chrome',
         'mac_canary' => 'com.google.Chrome.Canary'
     );
-    $aplist = array(
+    $aps = array(
         'win_stable_x86' => '-multi-chrome',
         'win_stable_x64' => 'x64-stable-multi-chrome',
         'win_beta_x86' => '1.1-beta',
@@ -36,12 +36,21 @@ function getchromelinks ($os, $channel, $arch) {
         'mac_canary_x86' => '',
         'mac_canary_x64' => ''
     );
-    
-    $ver = $verlist[$os];
-    $appid = $appidlist[$os.'_'.$channel];
-    $ap = $aplist[$os.'_'.$channel.'_'.$arch];
 
-    $postData = <<<postdata
+    $posts = array();
+    foreach ($oss as $os) {
+        foreach ($channels as $channel) {
+            foreach ($arches as $arch) {
+                # x64 only for Mac
+                if ($os == 'mac' && $arch == 'x86') {
+                    continue;
+                }
+
+                $ver = $vers[$os];
+                $appid = $appids[$os.'_'.$channel];
+                $ap = $aps[$os.'_'.$channel.'_'.$arch];
+
+                $posts[$os.'_'.$channel.'_'.$arch] = <<<postdata
 <?xml version='1.0' encoding='UTF-8'?>
 <request protocol='3.0' version='1.3.23.9' shell_version='1.3.21.103' ismachine='0'
     sessionid='{3597644B-2952-4F92-AE55-D315F45F80A5}' installsource='ondemandcheckforupdate'
@@ -51,47 +60,74 @@ function getchromelinks ($os, $channel, $arch) {
 <app appid='{$appid}' ap='{$ap}' version='' nextversion='' lang='' brand='GGLS' client=''><updatecheck/></app>
 </request>
 postdata;
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://tools.google.com/service/update2');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-    $xml = curl_exec($ch);
-    curl_close($ch);
-    return $xml;
+            }
+        }
+    }
+    return $posts;
 }
 
-$apijson = array();
-foreach ($oslist as $os) {
-    foreach ($channellist as $channel) {
-        foreach ($archlist as $arch) {
+// Multi Requests
+$posts = getPosts();
+$res = array();
+$ch = array();
+$mh = curl_multi_init();
+foreach ($posts as $key => $postData) {
+    $ch[$key] = curl_init();
+    curl_setopt($ch[$key], CURLOPT_URL, 'https://tools.google.com/service/update2');
+    curl_setopt($ch[$key], CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch[$key], CURLOPT_POST, 1);
+    curl_setopt($ch[$key], CURLOPT_POSTFIELDS, $postData);
+    curl_multi_add_handle($mh, $ch[$key]);
+}
+$active = null;
+do {
+    $mrc = curl_multi_exec($mh, $active);
+} while ($mrc == CURLM_CALL_MULTI_PERFORM);
+while ($active && $mrc == CURLM_OK) {
+    if (curl_multi_select($mh) != -1) {
+        do {
+            $mrc = curl_multi_exec($mh, $active);
 
-            # x64 only
-            if ($os == 'mac' && $arch == 'x86') {
-                continue;
-            }
+        } while ($mrc == CURLM_CALL_MULTI_PERFORM);
+    }
+}
+foreach ($posts as $key => $postData) {
+    $info = curl_multi_info_read($mh);
+    $heards = curl_getinfo($ch[$key]);
+    $res[$key] = curl_multi_getcontent($ch[$key]);
+    curl_multi_remove_handle($mh, $ch[$key]);
+    curl_close($ch[$key]);
+}
+curl_multi_close($mh);
 
-            $output = getchromelinks($os, $channel, $arch);
-            
-            # XML to Array
-            $output = json_decode(json_encode(simplexml_load_string($output)), TRUE);
-
-            $urls = array();
-            foreach ($output['app']['updatecheck']['urls']['url'] as $url) {
-                $url = $url['@attributes']['codebase'].$output['app']['updatecheck']['manifest']['packages']['package']['@attributes']['name'];
-                array_push($urls, $url);
-            }
-
-            $apijson[$os.'_'.$channel.'_'.$arch] = array(                    
-                "version" => $output['app']['updatecheck']['manifest']['@attributes']['version'],
-                "size" => $output['app']['updatecheck']['manifest']['packages']['package']['@attributes']['size'],
-                "sha256" => $output['app']['updatecheck']['manifest']['packages']['package']['@attributes']['hash_sha256'],
-                "urls" => $urls
-            );
+// XML to Array
+foreach ($res as $key => $xml) {
+    $xml = json_decode(json_encode(simplexml_load_string($xml)), TRUE);
+    if ($xml) {
+        $urls = array();
+        foreach ($xml['app']['updatecheck']['urls']['url'] as $url) {
+            $url = $url['@attributes']['codebase'].$xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['name'];
+            array_push($urls, $url);
         }
+
+        $res[$key] = array(
+            "error" => false,
+            "version" => $xml['app']['updatecheck']['manifest']['@attributes']['version'],
+            "size" => $xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['size'],
+            "sha256" => $xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['hash_sha256'],
+            "urls" => $urls
+        );
+    } else {
+        $res[$key] = array(
+            "error" => true,
+            "version" => "",
+            "size" => 0,
+            "sha256" => "",
+            "urls" => array()
+        );
     }
 }
 
-echo json_encode($apijson);
+header('Content-type: application/json; charset=utf-8');
+echo json_encode($res);
 ?>

@@ -1,9 +1,11 @@
 <?php
 
 function getPosts() {
-    $oss = array('win', 'mac');
+    $platforms = array(
+		'win' => array('x64', 'x86'),
+		'mac' => array('x64')
+	);
     $channels = array('stable', 'beta', 'dev', 'canary');
-    $arches = array('x64', 'x86');
     $vers = array(
         'win' => '6.3',
         'mac' => '46.0.2490.86'
@@ -14,8 +16,8 @@ function getPosts() {
         'win_dev' => '{8A69D345-D564-463C-AFF1-A69D9E530F96}',
         'win_canary' => '{4EA16AC7-FD5A-47C3-875B-DBF4A2008C20}',
         'mac_stable' => 'com.google.Chrome',
-        'mac_beta' => 'com.google.Chrome',
-        'mac_dev' => 'com.google.Chrome',
+        'mac_beta' => 'com.google.Chrome.Beta',
+        'mac_dev' => 'com.google.Chrome.Dev',
         'mac_canary' => 'com.google.Chrome.Canary'
     );
     $aps = array(
@@ -38,14 +40,9 @@ function getPosts() {
     );
 
     $posts = array();
-    foreach ($oss as $os) {
+    foreach ($platforms as $os => $arches) {
         foreach ($channels as $channel) {
             foreach ($arches as $arch) {
-                # x64 only for Mac
-                if ($os == 'mac' && $arch == 'x86') {
-                    continue;
-                }
-
                 $ver = $vers[$os];
                 $appid = $appids[$os.'_'.$channel];
                 $ap = $aps[$os.'_'.$channel.'_'.$arch];

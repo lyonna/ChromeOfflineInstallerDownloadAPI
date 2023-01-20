@@ -7,7 +7,7 @@ function getPosts() {
 	);
     $channels = array('stable', 'beta', 'dev', 'canary');
     $vers = array(
-        'win' => '6.3',
+        'win' => '10.0',
         'mac' => '46.0.2490.86'
     );
     $appids = array(

@@ -2,10 +2,10 @@
 
 function getPosts() {
     $platforms = array(
-		'win' => array('x64', 'x86'),
+		'win' => array('x64'),# array('x64', 'x86'),
 		'mac' => array('x64')
 	);
-    $channels = array('stable', 'beta', 'dev', 'canary');
+    $channels = array('stable');# array('stable', 'beta', 'dev', 'canary');
     $vers = array(
         'win' => '10.0',
         'mac' => '46.0.2490.86'
@@ -119,10 +119,12 @@ foreach ($res as $key => $value) {
         );
     } else {
         $urls = array();
+        if(is_array($xml['app']['updatecheck']['urls']['url'])){# Invalid argument supplied for foreach()
         foreach ($xml['app']['updatecheck']['urls']['url'] as $url) {
             $url = $url['@attributes']['codebase'].$xml['app']['updatecheck']['manifest']['packages']['package']['@attributes']['name'];
             array_push($urls, $url);
         }
+        }# Invalid argument supplied for foreach()
 
         $res[$key] = array(
             "error" => "",
@@ -135,5 +137,6 @@ foreach ($res as $key => $value) {
 }
 
 header('Content-type: application/json; charset=utf-8');
-echo json_encode($res);
+#echo json_encode($res);# Replacing "\/" with "/",Print
+echo json_encode($res, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 ?>

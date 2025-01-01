@@ -2,7 +2,7 @@
 Provides the latest Google Chrome offline installer download links.
 
 * Requirements: cURL
-* Supported platforms: Windows 32bit, Windows 64bit, Mac OS
+* Supported platforms: Windows 32bit, Windows 64bit, Mac OS (Both Intel and ARM64)
 * Supported channel: Stable, Beta, Dev, Canary
 * Example:
 ```
